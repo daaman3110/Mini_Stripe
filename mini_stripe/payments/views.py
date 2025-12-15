@@ -1,5 +1,6 @@
 import time
 import random
+import requests
 from rest_framework import viewsets
 from rest_framework.permissions import AllowAny
 from rest_framework.generics import CreateAPIView, RetrieveAPIView
@@ -62,20 +63,43 @@ class PaymentIntentConfirmView(APIView):
 
         payment_intent.save()
 
-        # 6: Log Webhook Event
-        WebhookEventLog.objects.create(
-            event_name=event_name,
-            payment_intent=payment_intent,
-            payload={
+        # 6: Emitting Webhook Event
+        event_name = (
+            "payment_intent.succeeded"
+            if payment_intent.status == PaymentIntent.StatusChoices.SUCCEEDED
+            else "payment_intent.failed"
+        )
+
+        requests.post(
+            "http://127.0.0.1:8000/webhooks/payment/",
+            json={
+                "event": event_name,
                 "payment_intent_id": str(payment_intent.id),
-                "status": payment_intent.status,
                 "amount": str(payment_intent.amount),
                 "currency": payment_intent.currency,
             },
         )
-
         # 7: Respond to Client
         return Response(
             {"id": payment_intent.id, "status": payment_intent.status},
             status=status.HTTP_200_OK,
         )
+
+
+class PaymentWebhookView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        event_name = request.data.get("event")
+        payment_intent_id = request.data.get("payment_intent_id")
+        payload = request.data
+
+        payment_intent = get_object_or_404(PaymentIntent, id=payment_intent_id)
+
+        WebhookEventLog.objects.create(
+            event_name=event_name,
+            payment_intent=payment_intent,
+            payload=payload,
+        )
+
+        return Response({"status": "received"}, status=200)

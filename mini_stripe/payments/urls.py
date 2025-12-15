@@ -4,6 +4,7 @@ from .views import (
     PaymentIntentCreateView,
     PaymentIntentDetailView,
     PaymentIntentConfirmView,
+    PaymentWebhookView
 )
 from django.urls import path
 
@@ -15,6 +16,7 @@ urlpatterns = [
     path("payment_intents/", PaymentIntentCreateView.as_view()),
     path("payment_intents/<uuid:pk>/", PaymentIntentDetailView.as_view()),
     path("payment_intents/<uuid:pk>/confirm/", PaymentIntentConfirmView.as_view()),
+    path("webhooks/payment/", PaymentWebhookView.as_view())
 ]
 
 # Add router URLs After
