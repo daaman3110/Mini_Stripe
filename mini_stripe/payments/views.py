@@ -1,9 +1,14 @@
-from django.shortcuts import render
+import time
+import random
 from rest_framework import viewsets
 from rest_framework.permissions import AllowAny
-from .models import Customer, PaymentIntent
-from .serializers import CustomerSerializer, PaymentIntentSerializer
 from rest_framework.generics import CreateAPIView, RetrieveAPIView
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+from .models import Customer, PaymentIntent, WebhookEventLog
+from .serializers import CustomerSerializer, PaymentIntentSerializer
 
 
 # Create your views here.
@@ -25,3 +30,52 @@ class PaymentIntentDetailView(RetrieveAPIView):
     queryset = PaymentIntent.objects.all()
     serializer_class = PaymentIntentSerializer
     permission_classes = [AllowAny]
+
+
+# Creating PaymentIntent Confirmation API
+class PaymentIntentConfirmView(APIView):
+    def post(self, request, pk):
+        # 1: Fetch Payment Intent
+        payment_intent = get_object_or_404(PaymentIntent, pk=pk)
+
+        # 2: Prevent Double Confirmation
+        if payment_intent.status in ["succeeded", "failed"]:
+            return Response(
+                {"error": "Payment Already Finalized"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 3: Mark as processing
+        payment_intent.status = PaymentIntent.StatusChoices.PROCESSING
+        payment_intent.save()
+
+        # 4: Simulate bank delay
+        time.sleep(2)
+
+        # 5: Random success/failure
+        if random.random() < 0.8:
+            payment_intent.status = PaymentIntent.StatusChoices.SUCCEEDED
+            event_name = "payment_intent.succeeded"
+        else:
+            payment_intent.status = PaymentIntent.StatusChoices.FAILED
+            event_name = "payment_intent.failed"
+
+        payment_intent.save()
+
+        # 6: Log Webhook Event
+        WebhookEventLog.objects.create(
+            event_name=event_name,
+            payment_intent=payment_intent,
+            payload={
+                "payment_intent_id": str(payment_intent.id),
+                "status": payment_intent.status,
+                "amount": str(payment_intent.amount),
+                "currency": payment_intent.currency,
+            },
+        )
+
+        # 7: Respond to Client
+        return Response(
+            {"id": payment_intent.id, "status": payment_intent.status},
+            status=status.HTTP_200_OK,
+        )
