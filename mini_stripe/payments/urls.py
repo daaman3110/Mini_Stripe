@@ -1,7 +1,15 @@
 from rest_framework.routers import DefaultRouter
-from .views import CustomerViewSet
+from .views import CustomerViewSet, PaymentIntentCreateView, PaymentIntentDetailView
+from django.urls import path
 
 router = DefaultRouter()
 router.register("customers", CustomerViewSet)
 
-urlpatterns = router.urls
+urlpatterns = [
+    # PaymentIntent APIs (manual, controlled)
+    path("payment_intents/", PaymentIntentCreateView.as_view()),
+    path("payment_intents/<uuid:pk>/", PaymentIntentDetailView.as_view()),
+]
+
+# Add router URLs After
+urlpatterns += router.urls
